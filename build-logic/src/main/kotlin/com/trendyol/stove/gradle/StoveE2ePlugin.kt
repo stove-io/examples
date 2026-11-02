@@ -26,6 +26,9 @@ class StoveE2ePlugin : Plugin<Project> {
       maxParallelForks = 1
       useJUnitPlatform()
       jvmArgs("--add-opens", "java.base/java.util=ALL-UNNAMED")
+      target.providers.gradleProperty("stove.chapter.test").orNull?.split(',')?.forEach { filter.includeTestsMatching(it) }
+      target.providers.gradleProperty("stove.demo.failure").orNull?.let { systemProperty("stove.demo.failure", it) }
+      target.providers.gradleProperty("stove.chapter").orNull?.let { systemProperty("stove.chapter", it) }
       doFirst {
         val isolatedTemp = temporaryDir.resolve("tmp").apply { mkdirs() }
         systemProperty("java.io.tmpdir", isolatedTemp.absolutePath)

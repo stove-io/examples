@@ -53,12 +53,48 @@ run app:
       just run-one "{{app}}"
     fi
 
+# Run a focused chapter against every application.
+chapter name:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{name}}" in
+      catalog) test_class='*ProductLifecycleTest' ;;
+      events) test_class='*ProductEventsTest' ;;
+      checkout|background|diagnostics) test_class='*SharedCheckoutTest' ;;
+      streaming) test_class='*SharedStreamingTest' ;;
+      *) echo "Unknown chapter '{{name}}': use catalog, events, checkout, background, streaming, or diagnostics." >&2; exit 1 ;;
+    esac
+    just up
+    ./gradlew :jvm:ecomm-java:e2eTest :jvm:ecomm-ktor:e2eTest :node:ecomm-node:e2eTest :rust:ecomm-rust:e2eTest :go:ecomm-process:e2eTest :go:ecomm-container:e2eTest "-Pstove.chapter.test=$test_class" "-Pstove.chapter={{name}}"
+
+# Run the complete commerce walkthrough.
+demo:
+    just chapter catalog
+    just chapter events
+    just chapter checkout
+    just chapter background
+    just chapter streaming
+
+# Deliberately fail a checkout for dashboard investigation.
+demo-failure mode:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{mode}}" in assertion|persistence) ;; *) echo "Choose assertion or persistence." >&2; exit 1 ;; esac
+    just up
+    ./gradlew :jvm:ecomm-java:e2eTest '-Pstove.chapter.test=*SharedCheckoutTest' '-Pstove.demo.failure={{mode}}' '-Pstove.chapter=diagnostics'
+
+# Run the existing JVM or Go profiling configuration.
+profile app:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    case "{{app}}" in ecomm-java|ecomm-ktor|ecomm-process|ecomm-container) just run "{{app}}" ;; *) echo "Choose ecomm-java, ecomm-ktor, ecomm-process, or ecomm-container." >&2; exit 1 ;; esac
+
 # Example names, one per line.
 [private]
 apps:
     #!/usr/bin/env bash
     set -euo pipefail
-    find jvm go -mindepth 2 -maxdepth 2 -name build.gradle.kts -print \
+    find jvm go node rust -mindepth 2 -maxdepth 2 -name build.gradle.kts ! -path "jvm/ecomm-jobs/*" -print \
       | while IFS= read -r file; do
           basename "$(dirname "$file")"
         done \
@@ -72,6 +108,10 @@ run-one name:
       project=":jvm:{{name}}:e2eTest"
     elif [ -f "go/{{name}}/build.gradle.kts" ]; then
       project=":go:{{name}}:e2eTest"
+    elif [ -f "node/{{name}}/build.gradle.kts" ]; then
+      project=":node:{{name}}:e2eTest"
+    elif [ -f "rust/{{name}}/build.gradle.kts" ]; then
+      project=":rust:{{name}}:e2eTest"
     else
       echo "Unknown example '{{name}}'." >&2
       echo "Examples:" >&2

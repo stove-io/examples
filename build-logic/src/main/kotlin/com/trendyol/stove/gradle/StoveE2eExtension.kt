@@ -41,6 +41,8 @@ abstract class StoveE2eExtension @Inject constructor(
       testClassesDirs = sourceSet.output.classesDirs
       classpath = sourceSet.runtimeClasspath
       useJUnitPlatform()
+      // These tests exercise live services and produce a new dashboard run each time.
+      outputs.upToDateWhen { false }
       reports {
         junitXml.required.set(true)
         html.required.set(true)
@@ -60,6 +62,9 @@ abstract class StoveE2eExtension @Inject constructor(
       "stove-tracing",
       "stove-dashboard",
       "stove-kafka",
+      "stove-wiremock",
+      "stove-grpc-mock",
+      "stove-grpc",
       "stove-extensions-kotest",
       "arrow-core",
       "kotest-runner-junit6",

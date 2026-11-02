@@ -27,7 +27,12 @@ dependencyResolutionManagement {
 }
 
 include(
-  "go:catalog-process",
-  "go:catalog-container",
-  "jvm:orders",
+  "protocol:commerce-jvm",
+  "jvm:ecomm-jobs",
+  "go:ecomm-process",
+  "go:ecomm-container",
+  "jvm:ecomm-ktor",
+  "jvm:ecomm-java",
+  "node:ecomm-node",
+  "rust:ecomm-rust",
 )

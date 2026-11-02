@@ -1,0 +1,10 @@
+{
+  "name": "@stove-examples/stove-kafka",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "index.mjs",
+  "dependencies": {
+    "@grpc/grpc-js": "^1.13.4",
+    "@grpc/proto-loader": "^0.7.15"
+  }
+}

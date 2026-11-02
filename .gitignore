@@ -34,3 +34,8 @@ build/
 # IDE
 .idea/
 *.iml
+
+# Language toolchains for the commerce examples
+node_modules/
+node/ecomm-node/dist/
+rust/**/target/

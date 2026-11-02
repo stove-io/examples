@@ -43,10 +43,10 @@ abstract class StoveGoExtension @Inject constructor(
       val output = binary.get().asFile
       workingDir = moduleDir
       val args = mutableListOf(go, "build")
-      if (cover) args.add("-cover")
+      if (cover) args.addAll(listOf("-cover", "-covermode=atomic"))
       args.addAll(listOf("-o", output.absolutePath, "."))
       commandLine(args)
-      inputs.files(project.fileTree(moduleDir) { include("*.go", "go.mod", "go.sum") })
+      inputs.files(project.fileTree(moduleDir) { include("**/*.go", "go.mod", "go.sum") })
       inputs.property("goExecutable", go)
       inputs.property("coverage", cover)
       outputs.file(binary)
@@ -67,7 +67,7 @@ abstract class StoveGoExtension @Inject constructor(
     val build = project.tasks.register<Exec>("buildGoImage") {
       description = "Builds the Go application image."
       group = "build"
-      val buildFlags = if (cover) "-cover" else ""
+      val buildFlags = if (cover) "-cover -covermode=atomic" else ""
       commandLine(
         docker,
         "build",
@@ -80,7 +80,7 @@ abstract class StoveGoExtension @Inject constructor(
         moduleDir.absolutePath,
       )
       inputs.file(moduleDir.resolve("Dockerfile"))
-      inputs.files(project.fileTree(moduleDir) { include("*.go", "go.mod", "go.sum") })
+      inputs.files(project.fileTree(moduleDir) { include("**/*.go", "go.mod", "go.sum") })
       inputs.property("coverageEnabled", cover)
       outputs.upToDateWhen { false }
     }
@@ -95,8 +95,14 @@ abstract class StoveGoExtension @Inject constructor(
 
   fun applyCoverage(test: Test) {
     if (!coverageEnabled.get()) return
-    test.systemProperty("go.cover.dir", coverageDir().absolutePath)
+    val coverDir = coverageDir()
+    test.systemProperty("go.cover.dir", coverDir.absolutePath)
     test.outputs.cacheIf { false }
+    test.outputs.upToDateWhen { false }
+    test.doFirst {
+      check(!coverDir.exists() || coverDir.deleteRecursively()) { "Could not clean Go coverage directory: $coverDir" }
+      check(coverDir.mkdirs()) { "Could not create Go coverage directory: $coverDir" }
+    }
   }
 
   fun coverageReports(tests: Iterable<TaskProvider<out org.gradle.api.Task>>, description: String) {
@@ -110,7 +116,12 @@ abstract class StoveGoExtension @Inject constructor(
       this.description = "Converts Go coverage data to standard format."
       group = "verification"
       workingDir = moduleDir
-      mustRunAfter(tests)
+      dependsOn(tests)
+      doFirst {
+        check(coverDir.listFiles()?.any { it.name.startsWith("covcounters.") } == true) {
+          "No Go coverage counters were produced in $coverDir"
+        }
+      }
       commandLine(go, "tool", "covdata", "textfmt", "-i=${coverDir.absolutePath}", "-o=${coverOut.absolutePath}")
     }
     val summary = project.tasks.register<Exec>("goCoverageSummary") {
@@ -126,13 +137,12 @@ abstract class StoveGoExtension @Inject constructor(
       workingDir = moduleDir
       dependsOn(report)
       commandLine(go, "tool", "cover", "-html=${coverOut.absolutePath}", "-o=${coverHtml.absolutePath}")
-      doLast { project.logger.lifecycle("Go coverage HTML: ${coverHtml.absolutePath}") }
+      doLast { logger.lifecycle("Go coverage HTML: ${coverHtml.absolutePath}") }
     }
     project.tasks.register("e2eTestWithCoverage") {
       this.description = description
       group = "verification"
-      dependsOn(tests)
-      finalizedBy(summary, html)
+      dependsOn(summary, html)
     }
   }
 

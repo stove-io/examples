@@ -1,0 +1,1 @@
+The observer contract is copied from `lib/stove-kafka/src/main/proto/messages.proto` in https://github.com/Trendyol/stove at revision `dddbac38d637`. It must remain wire-compatible with the Stove version used by the examples.

@@ -1,0 +1,192 @@
+# Gradle Configuration
+
+## Contents
+- [Dependencies (BOM)](#dependencies-bom)
+- [Register test-e2e source set](#register-test-e2e-source-set)
+- [Register e2eTest task](#register-e2etest-task)
+- [Test discovery and verification](#test-discovery-and-verification)
+- [IDE integration](#ide-integration)
+- [JUnit base test class](#junit-base-test-class)
+- [Available artifacts](#available-artifacts)
+
+## Dependencies (BOM)
+
+Reuse an existing test source set/task when the project already has one; the `test-e2e` / `e2eTest` names below are an example convention. Read the Stove version from the project's version catalog or build configuration and keep Stove modules aligned through its BOM.
+
+Stove e2e tests are Kotlin-first. Even for Java/Scala projects, keep e2e test sources in `src/test-e2e/kotlin`.
+
+```kotlin
+dependencies {
+    testImplementation(platform("com.trendyol:stove-bom:$stoveVersion"))
+    testImplementation("com.trendyol:stove")
+    testImplementation("com.trendyol:stove-spring")             // or stove-ktor / stove-quarkus / stove-micronaut
+    testImplementation("com.trendyol:stove-extensions-kotest")  // or stove-extensions-junit
+
+    // Add only what you need:
+    testImplementation("com.trendyol:stove-http")
+    testImplementation("com.trendyol:stove-oidc")               // OIDC authentication fixtures
+    testImplementation("com.trendyol:stove-postgres")
+    testImplementation("com.trendyol:stove-mysql")
+    testImplementation("com.trendyol:stove-mssql")
+    testImplementation("com.trendyol:stove-cassandra")
+    testImplementation("com.trendyol:stove-mongodb")
+    testImplementation("com.trendyol:stove-redis")
+    testImplementation("com.trendyol:stove-elasticsearch")
+    testImplementation("com.trendyol:stove-couchbase")
+    testImplementation("com.trendyol:stove-kafka")              // or stove-spring-kafka; choose one
+    testImplementation("com.trendyol:stove-wiremock")
+    testImplementation("com.trendyol:stove-grpc")
+    testImplementation("com.trendyol:stove-grpc-mock")
+    testImplementation("com.trendyol:stove-tracing")
+    testImplementation("com.trendyol:stove-dashboard")
+    testImplementation("com.trendyol:stove-process")            // non-JVM process AUT
+    testImplementation("com.trendyol:stove-container")          // non-JVM container AUT
+}
+```
+
+Choose one Kafka integration: `stove-kafka` and `stove-spring-kafka` define overlapping classes and should not share a runtime classpath. The BOM aligns Stove artifacts; reuse the project's Kotlin plugin and test engine versions.
+
+## Register test-e2e source set
+
+```kotlin
+val e2eSourceSet = sourceSets.create("test-e2e") {
+    compileClasspath += sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().output
+}
+configurations[e2eSourceSet.implementationConfigurationName]
+    .extendsFrom(configurations.testImplementation.get())
+configurations[e2eSourceSet.runtimeOnlyConfigurationName]
+    .extendsFrom(configurations.testRuntimeOnly.get())
+```
+
+## Register e2eTest task
+
+```kotlin
+tasks.register<Test>("e2eTest") {
+    description = "Runs e2e tests."
+    group = "verification"
+    testClassesDirs = sourceSets["test-e2e"].output.classesDirs
+    classpath = sourceSets["test-e2e"].runtimeClasspath
+
+    useJUnitPlatform()
+    reports {
+        junitXml.required.set(true)
+        html.required.set(true)
+    }
+}
+```
+
+## Test discovery and verification
+
+For Kotest, put `kotest.properties` on the selected source set's resource path (for this example, `src/test-e2e/resources/kotest.properties`):
+
+```properties
+kotest.framework.config.fqn=com.yourcompany.e2e.StoveConfig
+```
+
+Use the actual fully qualified config class name and register `StoveKotestExtension()` there; see [system-setup.md](system-setup.md#reporting). Keep the project's Kotest/JUnit engine and JUnit Platform launcher dependencies on the e2e runtime classpath. The Stove reporting extension does not replace the test engine.
+
+Compile the selected test source set first, then run the affected suite using the project's Gradle wrapper and actual module/task names, for example:
+
+```bash
+./gradlew :service:testE2eClasses
+./gradlew :service:e2eTest --tests 'com.yourcompany.e2e.OrderTest'
+```
+
+Ensure the configured container runtime is available for Testcontainers-managed systems. A successful Gradle invocation with zero discovered tests does not verify the setup; inspect the test report for executed tests.
+
+Use the source set's classes task to include Kotlin, Java, and resources. Kotlin can retain the source-set hyphen in its task name (`compileTest-e2eKotlin`); do not assume `compileTestE2eKotlin` exists.
+
+## IDE integration
+
+```kotlin
+idea {
+    module {
+        testSources.from(sourceSets["test-e2e"].allSource.sourceDirectories)
+        testResources.from(sourceSets["test-e2e"].resources.sourceDirectories)
+    }
+}
+```
+
+## Resolve API ambiguity from local artifacts
+
+When API names/signatures are unclear, inspect the version actually resolved on the e2e runtime classpath before opening cached source artifacts. A cache may contain several versions:
+
+```bash
+./gradlew :service:dependencyInsight --dependency stove --configuration testE2eRuntimeClasspath
+./gradlew :service:dependencyInsight --dependency kotlinx-coroutines-core --configuration testE2eRuntimeClasspath
+```
+
+Replace `:service` and the configuration with the project's actual names. Then inspect the matching source JAR or class signatures:
+
+```bash
+# Find Stove artifacts in Gradle cache
+find ~/.gradle/caches/modules-2/files-2.1 -path "*com.trendyol/stove-*/*/*.jar" | head -n 20
+
+# Find Stove artifacts in Maven local repo
+find ~/.m2/repository/com/trendyol -name "stove-*.jar" | head -n 20
+
+# List classes to locate exact type names
+jar tf ~/.m2/repository/com/trendyol/stove-spring-kafka/<version>/stove-spring-kafka-<version>.jar | rg "TestSystem|Kafka"
+
+# Inspect method signatures quickly
+javap -classpath ~/.m2/repository/com/trendyol/stove-spring-kafka/<version>/stove-spring-kafka-<version>.jar \
+  com.trendyol.stove.kafka.TestSystemKafkaInterceptor
+```
+
+Prefer `*-sources.jar` when available for more accurate reading of function names, generic types, and usage patterns.
+
+## JUnit base test class
+
+Use this instead of `AbstractProjectConfig` when using JUnit. `StoveJUnitExtension` manages per-test context and reporting; it does not start or stop Stove:
+
+```kotlin
+@ExtendWith(StoveJUnitExtension::class)
+@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+abstract class BaseE2ETest {
+    @BeforeAll
+    fun setup() {
+        runBlocking {
+            Stove().with { /* systems */ }.run()
+        }
+    }
+
+    @AfterAll
+    fun teardown() {
+        runBlocking { Stove.stop() }
+    }
+}
+```
+
+These callbacks run once per concrete subclass. Keep classes sharing Stove's global instance sequential, or reuse an existing suite-level lifecycle that starts and stops it once. Lifecycle methods must return `Unit` (JVM `void`).
+
+## Available artifacts
+
+| Artifact | Description |
+|---|---|
+| `stove` | Core framework |
+| `stove-spring` | Spring Boot starter |
+| `stove-ktor` | Ktor starter |
+| `stove-quarkus` | Quarkus starter |
+| `stove-micronaut` | Micronaut starter |
+| `stove-http` | HTTP client system |
+| `stove-oidc` | OIDC issuers, token grants, and mock authentication fixtures |
+| `stove-postgres` | PostgreSQL system |
+| `stove-mysql` | MySQL system |
+| `stove-mssql` | MSSQL system |
+| `stove-cassandra` | Cassandra system |
+| `stove-mongodb` | MongoDB system |
+| `stove-redis` | Redis system |
+| `stove-elasticsearch` | Elasticsearch system |
+| `stove-couchbase` | Couchbase system |
+| `stove-kafka` | Standalone Kafka system |
+| `stove-spring-kafka` | Spring Kafka with listener and producer observation (`shouldBeConsumed`, `shouldBeFailed`, `shouldBePublished`) |
+| `stove-wiremock` | WireMock system |
+| `stove-grpc` | gRPC client system |
+| `stove-grpc-mock` | gRPC mock server system |
+| `stove-tracing` | Tracing system |
+| `stove-dashboard` | Dashboard system (streams events to Stove Server) |
+| `stove-process` | Process-based AUT starter (`processApp`, `goApp`) |
+| `stove-container` | Container-based AUT starter (`containerApp`) |
+| `stove-extensions-kotest` | Kotest reporting integration |
+| `stove-extensions-junit` | JUnit reporting integration |
