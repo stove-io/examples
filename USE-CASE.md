@@ -1,6 +1,6 @@
 # Commerce use-case
 
-Every commerce example implements this contract. The Stove test in `usecase/e2e` is the same for each suite. Only `StoveConfig` changes, because the runner and the way configuration is passed change.
+Every commerce example implements this contract. The Stove test in `usecase/e2e` is the same for each suite. Each `StoveConfig` extends the shared `EcommStoveConfig` and only supplies its runner and the way configuration is passed.
 
 Every application implements the same product, checkout, statistics, background-work, gRPC-query, and streaming scenarios. JVM suites also demonstrate direct application bean access.
 

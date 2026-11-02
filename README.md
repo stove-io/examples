@@ -13,7 +13,7 @@ All applications run the same catalog, checkout, and streaming use cases in [`Us
 | `ecomm-node` | `node/ecomm-node` | TypeScript commerce service running on Node.js as a host process |
 | `ecomm-rust` | `rust/ecomm-rust` | Rust commerce service as a host process |
 
-`go/ecomm` is the shared Go module. The process and container suites compile that module. Every suite compiles `usecase/e2e`; the Go, Node.js, and Rust process suites also share their environment mappings in `usecase/process`.
+`go/ecomm` is the shared Go module. The process and container suites compile that module. Every suite compiles `usecase/e2e`; the Go, Node.js, and Rust process suites also share their environment mappings in `usecase/process`. `EcommStoveConfig` owns the ports, dashboard metadata, shared systems, and lifecycle; each suite's `StoveConfig` only adds its runner and configuration mapping.
 
 Versions for every Gradle project live in one catalog: [`gradle/libs.versions.toml`](gradle/libs.versions.toml). Shared test and Go build behavior lives in [`build-logic`](build-logic) as `com.trendyol.stove.e2e` and `com.trendyol.stove.go`, which is the base for a later Stove Gradle plugin. `just` reads the Stove version from the catalog and starts `ghcr.io/trendyol/stove-server` at the same snapshot, backed by PostgreSQL.
 

@@ -53,7 +53,7 @@ run app:
       just run-one "{{app}}"
     fi
 
-# Run a focused chapter against every application.
+# Run a focused chapter against every application in parallel.
 chapter name:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -65,7 +65,7 @@ chapter name:
       *) echo "Unknown chapter '{{name}}': use catalog, events, checkout, background, streaming, or diagnostics." >&2; exit 1 ;;
     esac
     just up
-    ./gradlew :jvm:ecomm-java:e2eTest :jvm:ecomm-ktor:e2eTest :node:ecomm-node:e2eTest :rust:ecomm-rust:e2eTest :go:ecomm-process:e2eTest :go:ecomm-container:e2eTest "-Pstove.chapter.test=$test_class" "-Pstove.chapter={{name}}"
+    ./gradlew --parallel :jvm:ecomm-java:e2eTest :jvm:ecomm-ktor:e2eTest :node:ecomm-node:e2eTest :rust:ecomm-rust:e2eTest :go:ecomm-process:e2eTest :go:ecomm-container:e2eTest "-Pstove.chapter.test=$test_class" "-Pstove.chapter={{name}}"
 
 # Run the complete commerce walkthrough.
 demo:

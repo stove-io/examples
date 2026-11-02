@@ -24,6 +24,8 @@ import com.trendyol.stove.wiremock.wiremock
 import com.trendyol.stove.serialization.StoveSerde
 import org.testcontainers.containers.Network
 
+internal fun stoveServerUrl(): String = System.getenv("STOVE_SERVER_URL") ?: "http://localhost:4040"
+
 /** Systems common to the same use cases, independent of the application runner. */
 fun WithDsl.sharedStove(
   appPort: Int,
@@ -36,7 +38,7 @@ fun WithDsl.sharedStove(
   httpClient { HttpClientSystemOptions(baseUrl = "http://localhost:$appPort") }
   if (orderGrpcPort != null) grpc { GrpcSystemOptions(host = "localhost", port = orderGrpcPort) }
   dashboard {
-    val serverUrl = System.getenv("STOVE_SERVER_URL") ?: "http://localhost:4040"
+    val serverUrl = stoveServerUrl()
     DashboardSystemOptions(
       appName = appName,
       metadata = metadata + mapOf(

@@ -1,48 +1,32 @@
 package com.trendyol.stove.examples.ecomm.e2e.setup
 
-import com.trendyol.stove.extensions.kotest.StoveKotestExtension
 import com.trendyol.stove.process.ProcessApplicationOptions
 import com.trendyol.stove.process.ProcessTarget
 import com.trendyol.stove.process.envMapper
 import com.trendyol.stove.process.processApp
-import com.trendyol.stove.system.PortFinder
-import com.trendyol.stove.system.Stove
-import io.kotest.core.config.AbstractProjectConfig
-import io.kotest.core.extensions.Extension
+import com.trendyol.stove.system.WithDsl
 
-private val APP_PORT = PortFinder.findAvailablePort()
-private val ORDER_GRPC_PORT = PortFinder.findAvailablePort()
-private val OTLP_PORT = PortFinder.findAvailablePort()
-private val FRAUD_PORT = PortFinder.findAvailablePort()
+private val PORTS = SuitePorts(withOtlp = true)
+private val APP_BINARY = requireNotNull(System.getProperty("rust.app.binary")?.takeIf { it.isNotBlank() }) {
+  "rust.app.binary system property not set"
+}
 
-class StoveConfig : AbstractProjectConfig() {
-  override val extensions: List<Extension> = listOf(StoveKotestExtension())
+class StoveConfig : EcommStoveConfig(
+  ports = PORTS,
+  appName = "ecomm-rust",
+  metadata = suiteMetadata(language = "rust", runner = "process", framework = "axum")
+) {
+  override fun WithDsl.configureSuite() {
+    sharedProcessInfrastructure()
 
-  override suspend fun beforeProject() {
-    val binary = System.getProperty("rust.app.binary").orEmpty()
-    require(binary.isNotBlank()) { "rust.app.binary system property not set" }
-
-    Stove()
-      .with {
-        sharedStove(appPort = APP_PORT, orderGrpcPort = ORDER_GRPC_PORT, appName = "ecomm-rust", metadata = mapOf("language" to "rust", "framework" to "axum", "runner" to "process"), otlpPort = OTLP_PORT)
-
-        sharedCheckoutDependencies(FRAUD_PORT)
-
-        sharedProcessInfrastructure()
-
-        processApp {
-          ProcessApplicationOptions(
-            command = listOf(binary),
-            target = ProcessTarget.Server(port = APP_PORT, portEnvVar = "APP_PORT"),
-            envProvider = envMapper {
-              commerceEnvironment(FRAUD_PORT, ORDER_GRPC_PORT, OTLP_PORT)
-            }
-          )
+    processApp {
+      ProcessApplicationOptions(
+        command = listOf(APP_BINARY),
+        target = ProcessTarget.Server(port = ports.app, portEnvVar = "APP_PORT"),
+        envProvider = envMapper {
+          commerceEnvironment(ports.fraud, ports.orderGrpc, requireNotNull(ports.otlp))
         }
-      }.run()
-  }
-
-  override suspend fun afterProject() {
-    Stove.stop()
+      )
+    }
   }
 }
